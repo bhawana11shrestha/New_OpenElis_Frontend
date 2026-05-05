@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ActionIcon, Badge, Metric, PageWrap, PrimaryButton } from "./primitives";
-import { COLLECTED, SAMPLES, TODAY, TO_COLLECT } from "@/data/openelis";
+import { COLLECTED, SAMPLES, TODAY, TO_COLLECT, type Sample } from "@/data/openelis";
 import { Plus } from "lucide-react";
 
-function AllTable({ setActive }: { setActive: (v: string) => void }) {
+type CollectRow = (typeof TO_COLLECT)[number];
+type CollectedRow = (typeof COLLECTED)[number];
+
+function AllTable({ rows, setActive }: { rows: Sample[]; setActive: (v: string) => void }) {
   return (
     <table className="w-full text-sm">
       <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -18,7 +21,7 @@ function AllTable({ setActive }: { setActive: (v: string) => void }) {
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
-        {SAMPLES.map((r) => (
+        {rows.map((r) => (
           <tr key={r.accession} className="h-16 transition-base hover:bg-secondary/40">
             <td className="px-6 font-semibold text-primary">
               <span className="inline-flex items-center gap-2">
@@ -43,7 +46,7 @@ function AllTable({ setActive }: { setActive: (v: string) => void }) {
   );
 }
 
-function CollectTable() {
+function CollectTable({ rows }: { rows: CollectRow[] }) {
   return (
     <table className="w-full text-sm">
       <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -57,7 +60,7 @@ function CollectTable() {
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
-        {TO_COLLECT.map((r) => (
+        {rows.map((r) => (
           <tr key={r.patientId} className="h-16 hover:bg-secondary/40 transition-base">
             <td className="px-6 font-semibold text-primary">{r.patientId}</td>
             <td className="px-6 font-semibold">{r.patient}</td>
@@ -76,7 +79,7 @@ function CollectTable() {
   );
 }
 
-function CollectedTable({ setActive }: { setActive: (v: string) => void }) {
+function CollectedTable({ rows, setActive }: { rows: CollectedRow[]; setActive: (v: string) => void }) {
   return (
     <table className="w-full text-sm">
       <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -91,7 +94,7 @@ function CollectedTable({ setActive }: { setActive: (v: string) => void }) {
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
-        {COLLECTED.map((r) => (
+        {rows.map((r) => (
           <tr key={r.accession} className="h-16 hover:bg-secondary/40 transition-base">
             <td className="px-6 font-semibold text-primary">{r.accession}</td>
             <td className="px-6">
@@ -117,9 +120,100 @@ function CollectedTable({ setActive }: { setActive: (v: string) => void }) {
   );
 }
 
+function PaginationControls({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border bg-gradient-surface px-6 py-4 text-sm">
+      <div className="flex items-center gap-3">
+        <span className="text-muted-foreground">Items per page</span>
+        <select
+          value={pageSize}
+          onChange={(event) => onPageSizeChange(Number(event.target.value))}
+          className="rounded-md border border-input bg-background px-2.5 py-1.5 outline-none transition-base focus:border-ring focus:ring-2 focus:ring-ring/20"
+        >
+          {[4, 6, 8, 10].map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+        <span className="text-muted-foreground">
+          {start}-{end} of {total}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={page === 1}
+          onClick={() => onPageChange(page - 1)}
+          className="rounded-md border border-border px-2.5 py-1.5 text-muted-foreground transition-base hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Prev
+        </button>
+        {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+          <button
+            key={pageNumber}
+            type="button"
+            onClick={() => onPageChange(pageNumber)}
+            className={cn(
+              "min-w-9 rounded-md px-2.5 py-1.5 text-sm font-semibold transition-base",
+              page === pageNumber
+                ? "bg-primary/10 text-primary"
+                : "border border-border text-muted-foreground hover:bg-secondary",
+            )}
+          >
+            {pageNumber}
+          </button>
+        ))}
+        <button
+          type="button"
+          disabled={page === totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="rounded-md border border-border px-2.5 py-1.5 text-muted-foreground transition-base hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard({ setActive }: { setActive: (v: string) => void }) {
   const [tab, setTab] = useState<"All" | "Samples to Collect" | "Samples Collected">("All");
   const [period, setPeriod] = useState("Today");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(6);
+
+  const currentRows = tab === "All" ? SAMPLES : tab === "Samples to Collect" ? TO_COLLECT : COLLECTED;
+  const totalPages = Math.max(1, Math.ceil(currentRows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = currentRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const changeTab = (nextTab: typeof tab) => {
+    setTab(nextTab);
+    setPage(1);
+  };
+
+  const changePageSize = (nextPageSize: number) => {
+    setPageSize(nextPageSize);
+    setPage(1);
+  };
 
   return (
     <PageWrap>
@@ -151,7 +245,7 @@ export function Dashboard({ setActive }: { setActive: (v: string) => void }) {
               {(["All", "Samples to Collect", "Samples Collected"] as const).map((t) => (
                 <button
                   key={t}
-                  onClick={() => setTab(t)}
+                  onClick={() => changeTab(t)}
                   className={cn(
                     "rounded-md px-3 py-1.5 text-xs font-semibold transition-base",
                     tab === t ? "bg-card text-primary shadow-elegant" : "text-muted-foreground hover:text-foreground",
@@ -179,9 +273,16 @@ export function Dashboard({ setActive }: { setActive: (v: string) => void }) {
             </div>
           )}
         </div>
-        {tab === "All" && <AllTable setActive={setActive} />}
-        {tab === "Samples to Collect" && <CollectTable />}
-        {tab === "Samples Collected" && <CollectedTable setActive={setActive} />}
+        {tab === "All" && <AllTable rows={pagedRows as Sample[]} setActive={setActive} />}
+        {tab === "Samples to Collect" && <CollectTable rows={pagedRows as CollectRow[]} />}
+        {tab === "Samples Collected" && <CollectedTable rows={pagedRows as CollectedRow[]} setActive={setActive} />}
+        <PaginationControls
+          page={safePage}
+          pageSize={pageSize}
+          total={currentRows.length}
+          onPageChange={setPage}
+          onPageSizeChange={changePageSize}
+        />
       </section>
     </PageWrap>
   );
